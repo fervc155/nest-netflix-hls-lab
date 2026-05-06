@@ -1,0 +1,51 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # 👇 CLAVE para que funcione dentro de docker + host
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  api:
+    image: node:18
+    working_dir: /app
+    command: sh -c "npm install && npm run start:dev"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api:/app
+      - /app/node_modules # 👈 CLAVE
+      - ./videos:/videos
+    depends_on:
+      - kafka
+
+  worker:
+    build: ./worker
+    depends_on:
+      - kafka
+    volumes:
+      - ./videos:/videos
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8080:80"
+    volumes:
+      - ./videos:/videos
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
